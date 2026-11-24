@@ -3,6 +3,8 @@ on:
   push:
     paths:
       - 'GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip'
+      - 'upgrade_model.py'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,11 +22,13 @@ jobs:
           gradle-version: '8.12.1'
       - name: Extract original source
         run: unzip -q GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip
+      - name: Generate v0.1.2 pouch models
+        run: python3 upgrade_model.py guai_guai_source
       - name: Build mod
         working-directory: guai_guai_source
         run: gradle --no-daemon build
       - uses: actions/upload-artifact@v4
         with:
-          name: guaiguai-neoforge-1.21.1-v0.1.1
+          name: guaiguai-neoforge-1.21.1-v0.1.2
           path: guai_guai_source/build/libs/*.jar
           if-no-files-found: error
