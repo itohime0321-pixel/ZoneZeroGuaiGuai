@@ -1,4 +1,4 @@
-import json, math, pathlib, sys
+import json, math, pathlib, sys, base64
 root=pathlib.Path(sys.argv[1] if len(sys.argv)>1 else 'guai_guai_source')
 models=root/'src/main/resources/assets/guaiguai/models/block'
 faces=[]
@@ -59,7 +59,7 @@ def wood():
         a,b=[A,B,C,D][i],[A,B,C,D][(i+1)%4]
         face('wood',[(x0,*a),(x1,*a),(x1,*b),(x0,*b)])
 wood()
-obj=['# GuaiGuai v0.1.3 - inflated snack pouch','mtllib pouch.mtl','o pouch']
+obj=['# GuaiGuai v0.1.4 - inflated snack pouch','mtllib pouch.mtl','o pouch']
 idx=1
 for mat,p,uv in faces:
     obj.append('usemtl '+mat)
@@ -71,12 +71,14 @@ for mat,p,uv in faces:
     idx+=4
 (models/'pouch.obj').write_text('\n'.join(obj)+'\n')
 (models/'pouch.mtl').write_text(''.join(f'newmtl {m}\nKa 0 0 0\nKd 1 1 1\nmap_Kd #{m}\n\n' for m in ['front','back','side','seal','wood']))
+(root/'src/main/resources/assets/guaiguai/textures/block/plain_brown_support.png').write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAFklEQVR4nGNoDDMmCTGMahjVMHw1AAC46QoQVSKsmwAAAABJRU5ErkJggg=='))
 for color in ['green','yellow','red','blue','purple','black']:
     p=models/(color+'_guaiguai.json');m=json.loads(p.read_text());m.pop('elements',None)
+    m['textures']['wood']='guaiguai:block/plain_brown_support'
     m.update(loader='neoforge:obj',model='guaiguai:models/block/pouch.obj',automatic_culling=False,shade_quads=True,flip_v=False,emissive_ambient=False)
     p.write_text(json.dumps(m,indent=2)+'\n')
 p=root/'src/main/java/tw/zonezero/guaiguai/AuraBlock.java';s=p.read_text();s=s.replace('2.9, 0, 4, 13.1, 14, 13.5','2.8, 0, 3.4, 13.2, 14, 14.1').replace('2.9, 0, 2.5, 13.1, 14, 12','2.8, 0, 1.9, 13.2, 14, 12.6').replace('2.5, 0, 2.9, 12, 14, 13.1','1.9, 0, 2.8, 12.6, 14, 13.2').replace('4, 0, 2.9, 13.5, 14, 13.1','3.4, 0, 2.8, 14.1, 14, 13.2');p.write_text(s)
 for name in ['build.gradle','src/main/resources/META-INF/neoforge.mods.toml']:
-    p=root/name;p.write_text(p.read_text().replace('0.1.1','0.1.3'))
-p=root/'README_zh_TW.txt';p.write_text(p.read_text()+'\n\nv0.1.3：加厚曲面袋身，保留薄封口及貼地底封口；保留六色原貼圖、創造頁面及 60 秒效果間隔。\n')
+    p=root/name;p.write_text(p.read_text().replace('0.1.1','0.1.4'))
+p=root/'README_zh_TW.txt';p.write_text(p.read_text()+'\n\nv0.1.4：加厚曲面袋身，保留薄封口及貼地底封口；支架改為純褐色 #815633；保留六色原貼圖、創造頁面及 60 秒效果間隔。\n')
 print('Generated',len(faces)*2,'triangles; all vertices within 1 block.')
