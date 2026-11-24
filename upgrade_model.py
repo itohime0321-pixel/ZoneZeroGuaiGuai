@@ -7,12 +7,12 @@ def face(mat,p,uv=None):
 xs=[-1,-.75,-.5,-.25,0,.25,.5,.75,1]
 ts=[0,.06,.14,.24,.36,.5,.64,.76,.86,.94,1]
 def point(s,t,front):
-    arch=math.sin(math.pi*t)**.72
+    arch=math.sin(math.pi*t)**.60
     width=4.90+.20*arch-.16*math.sin(math.pi*t)**3
     x=8+s*width
     y=.36+12.25*t+.12*s*s*math.sin(math.pi*t)-.11*s*s*t
     z=5.35+4.55*t
-    puff=.105+1.48*arch*(max(0,1-s*s)**.68)+.12*arch
+    puff=.105+2.30*arch*(max(0,1-s*s)**.58)+.12*arch
     z+=(-1.12 if front else .84)*puff
     return (x,y,z)
 for j in range(len(ts)-1):
@@ -51,7 +51,7 @@ strip([[(8+5.08*s,13.18+.10*s*s,10.08+.03*s*s) for s in xs],[(8+4.90*s,12.56-.11
 strip([[(8+5.18*s,0,4.43+.12*s*s) for s in xs],[(8+5.12*s,.015,4.92+.035*s*s) for s in xs],[(8+4.90*s,.27,5.35) for s in xs]],'seal',(.09,0))
 def wood():
     x0,x1=5.7,10.3
-    A=(0,13.3);B=(0,14.05);C=(8.0,10.02);D=(8.0,9.37)
+    A=(0,13.3);B=(0,14.05);C=(8.0,10.70);D=(8.0,10.05)
     for x,rev in [(x0,False),(x1,True)]:
         p=[(x,y,z) for y,z in [A,B,C,D]]
         face('wood',p[::-1] if rev else p)
@@ -59,7 +59,7 @@ def wood():
         a,b=[A,B,C,D][i],[A,B,C,D][(i+1)%4]
         face('wood',[(x0,*a),(x1,*a),(x1,*b),(x0,*b)])
 wood()
-obj=['# GuaiGuai v0.1.2 - inflated snack pouch','mtllib pouch.mtl','o pouch']
+obj=['# GuaiGuai v0.1.3 - inflated snack pouch','mtllib pouch.mtl','o pouch']
 idx=1
 for mat,p,uv in faces:
     obj.append('usemtl '+mat)
@@ -75,8 +75,8 @@ for color in ['green','yellow','red','blue','purple','black']:
     p=models/(color+'_guaiguai.json');m=json.loads(p.read_text());m.pop('elements',None)
     m.update(loader='neoforge:obj',model='guaiguai:models/block/pouch.obj',automatic_culling=False,shade_quads=True,flip_v=False,emissive_ambient=False)
     p.write_text(json.dumps(m,indent=2)+'\n')
-p=root/'src/main/java/tw/zonezero/guaiguai/AuraBlock.java';s=p.read_text();s=s.replace('2.9, 0, 4, 13.1, 14, 13.5','2.8, 0, 4, 13.2, 14, 14.1').replace('2.9, 0, 2.5, 13.1, 14, 12','2.8, 0, 1.9, 13.2, 14, 12').replace('2.5, 0, 2.9, 12, 14, 13.1','1.9, 0, 2.8, 12, 14, 13.2').replace('4, 0, 2.9, 13.5, 14, 13.1','4, 0, 2.8, 14.1, 14, 13.2');p.write_text(s)
+p=root/'src/main/java/tw/zonezero/guaiguai/AuraBlock.java';s=p.read_text();s=s.replace('2.9, 0, 4, 13.1, 14, 13.5','2.8, 0, 3.4, 13.2, 14, 14.1').replace('2.9, 0, 2.5, 13.1, 14, 12','2.8, 0, 1.9, 13.2, 14, 12.6').replace('2.5, 0, 2.9, 12, 14, 13.1','1.9, 0, 2.8, 12.6, 14, 13.2').replace('4, 0, 2.9, 13.5, 14, 13.1','3.4, 0, 2.8, 14.1, 14, 13.2');p.write_text(s)
 for name in ['build.gradle','src/main/resources/META-INF/neoforge.mods.toml']:
-    p=root/name;p.write_text(p.read_text().replace('0.1.1','0.1.2'))
-p=root/'README_zh_TW.txt';p.write_text(p.read_text()+'\n\nv0.1.2：改為 NeoForge OBJ 曲面袋身、薄封口、貼地底封口；保留六色原貼圖、創造頁面及 60 秒效果間隔。\n')
+    p=root/name;p.write_text(p.read_text().replace('0.1.1','0.1.3'))
+p=root/'README_zh_TW.txt';p.write_text(p.read_text()+'\n\nv0.1.3：加厚曲面袋身，保留薄封口及貼地底封口；保留六色原貼圖、創造頁面及 60 秒效果間隔。\n')
 print('Generated',len(faces)*2,'triangles; all vertices within 1 block.')
