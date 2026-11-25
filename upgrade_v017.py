@@ -334,7 +334,7 @@ final class AdminSettings {
     private static Map<String, Settings> defaults() {
         Map<String, Settings> m = new LinkedHashMap<>();
         for (String color : COLORS)
-            m.put(color, new Settings(true, true, color.equals("red") || color.equals("black") ? 180 : 300, 60, 7, 1));
+            m.put(color, new Settings(false, true, color.equals("red") || color.equals("black") ? 180 : 300, 60, 7, 1));
         return Map.copyOf(m);
     }
     static Settings get(String color) { return Objects.requireNonNull(settings.get(color), "Unknown color"); }
