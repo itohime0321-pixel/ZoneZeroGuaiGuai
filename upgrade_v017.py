@@ -172,7 +172,7 @@ for color in colors:
     write(p,json.dumps({'variants':variants},indent=2)+'\n')
 zh=['經典奶油椰子風味，香甜酥脆。','濃郁的五香風味，鹹香酥脆，令人忍不住一口接著一口。','香濃的巧克力風味，帶著恰到好處的甜味與酥脆口感。','清爽的海鹽風味，淡淡鹹香中帶著玉米的自然香氣。','香甜的葡萄風味，帶有濃郁果香與輕盈酥脆的口感。','濃厚的黑胡椒風味，鹹香中帶著微微辛辣的滋味。']
 en=['Classic cream coconut flavor, sweet and crispy.','Rich five-spice flavor, savory and crispy, with every bite calling for another.','Rich chocolate flavor with just the right sweetness and a satisfying crunch.','Refreshing sea salt flavor with a light savory taste and natural corn aroma.','Sweet grape flavor with a rich fruity aroma and a light, crispy texture.','Bold black pepper flavor with a savory taste and a gentle spicy kick.']
-for lang,descs,trad,subs in [('zh_tw',zh,'在台灣，似乎有著將它擺放在機器上，祈求設備不要損壞、乖乖運作的信仰。',['乖乖：包裝沙沙聲','乖乖：包裝碎裂聲','乖乖：包裝摩擦聲']),('en_us',en,'In Taiwan, there seems to be a belief in placing it on machines in the hope that they will not break down and will run properly.',['Guai Guai: Bag rustles','Guai Guai: Bag crinkles','Guai Guai: Bag crackles'])]:
+for lang,descs,trad,subs in [('zh_tw',zh,'在某個小島上，似乎有著將它擺放在機器上，祈求設備不要損壞、乖乖運作的信仰。',['乖乖：包裝沙沙聲','乖乖：包裝碎裂聲','乖乖：包裝摩擦聲']),('en_us',en,'On a certain small island, there seems to be a belief in placing it on machines in the hope that they will not break down and will run properly.',['Guai Guai: Bag rustles','Guai Guai: Bag crinkles','Guai Guai: Bag crackles'])]:
     p=assets/'lang'/f'{lang}.json'
     d=json.loads(p.read_text())
     d.pop('tooltip.guaiguai.aura',None)
