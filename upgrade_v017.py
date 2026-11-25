@@ -246,3 +246,317 @@ java -cp "$tmp" tw.zonezero.guaiguai.AuraTimingTest
 p=root/'README_zh_TW.txt'
 write(p,p.read_text()+'\n\nv0.1.7: 七格光環、光源8、含水、乾燥時可燃、無碰撞、支撐、活塞、名稱配色、商品介紹及最佳化；音效在建置時重新合成。\n')
 print('v0.1.7 sources and resources generated.')
+
+# v0.1.8: operator-controlled recipes and aura settings
+p=java/'AuraBlock.java'
+s=p.read_text()
+s=replace(s,'''    @Override public boolean ignitedByLava(BlockState state, BlockGetter level, BlockPos pos, Direction face) {
+        return !state.getValue(WATERLOGGED);
+    }
+''','')
+s=replace(s,'    private static final int INTERVAL = 60 * 20;','')
+s=replace(s,'    private static final double RADIUS = 7.0;','')
+s=replace(s,'    private final int duration;','')
+s=replace(s,'        this.duration = minutes * 60 * 20;','')
+s=replace(s,'AuraTiming.initialDelay(pos.asLong(), INTERVAL)','AuraTiming.initialDelay(pos.asLong(), AdminSettings.get(color).intervalSeconds() * 20)')
+s=replace(s,'''        level.scheduleTick(pos, this, INTERVAL);
+        List<ServerPlayer> players''','''        AdminSettings.Settings settings = AdminSettings.get(color);
+        level.scheduleTick(pos, this, settings.intervalSeconds() * 20);
+        if (!settings.effect()) return;
+        double radius = settings.radius();
+        List<ServerPlayer> players''')
+s=s.replace('applyIfNearby(players.get(i), type, x, y, z);','applyIfNearby(players.get(i), type, x, y, z, settings);')
+s=s.replace('applyIfNearby(player, type, x, y, z);','applyIfNearby(player, type, x, y, z, settings);')
+s=s.replace('x-RADIUS, y-RADIUS, z-RADIUS','x-radius, y-radius, z-radius').replace('x+RADIUS, y+RADIUS, z+RADIUS','x+radius, y+radius, z+radius')
+s=replace(s,'''double x, double y, double z) {
+        if (!AuraTiming.withinRadius(player.getX()-x, player.getY()-y, player.getZ()-z, RADIUS)''','''double x, double y, double z, AdminSettings.Settings settings) {
+        if (!AuraTiming.withinRadius(player.getX()-x, player.getY()-y, player.getZ()-z, settings.radius())''')
+s=replace(s,'''        if (current == null || AuraTiming.shouldRefresh(current.getAmplifier(),
+                current.isInfiniteDuration(), current.getDuration(), duration)) {
+            player.addEffect(new MobEffectInstance(type, duration, 0, true, false, true));
+        }''','''        int duration = settings.durationSeconds() * 20;
+        int amplifier = settings.effectLevel() - 1;
+        if (current == null || (!current.isInfiniteDuration() &&
+                (current.getAmplifier() < amplifier ||
+                 (current.getAmplifier() == amplifier &&
+                  AuraTiming.shouldRefresh(0, false, current.getDuration(), duration))))) {
+            player.addEffect(new MobEffectInstance(type, duration, amplifier, true, false, true));
+        }''')
+# Preserve the water source if the underlying block is removed.
+s=replace(s,'return Blocks.AIR.defaultBlockState();','return state.getValue(WATERLOGGED) ? Blocks.WATER.defaultBlockState() : Blocks.AIR.defaultBlockState();')
+write(p,s)
+p=java/'AuraTiming.java'
+s=p.read_text()
+s=replace(s,'remaining <= duration - REFRESH_TOLERANCE','remaining <= duration - Math.min(REFRESH_TOLERANCE, Math.max(1, duration / 2))')
+write(p,s)
+write(java/'AdminSettings.java','''package tw.zonezero.guaiguai;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import net.neoforged.fml.loading.FMLPaths;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
+
+final class AdminSettings {
+    static final List<String> COLORS = List.of("green", "yellow", "red", "blue", "purple", "black");
+    static final int MIN_INTERVAL = 10, MAX_INTERVAL = 3600;
+    static final int MIN_DURATION = 1, MAX_DURATION = 86400;
+    static final int MIN_RADIUS = 1, MAX_RADIUS = 32;
+    static final int MIN_LEVEL = 1, MAX_LEVEL = 5;
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static volatile Map<String, Settings> settings = defaults();
+
+    record Settings(boolean recipe, boolean effect, int durationSeconds,
+                    int intervalSeconds, int radius, int effectLevel) {
+        Settings {
+            if (durationSeconds < MIN_DURATION || durationSeconds > MAX_DURATION ||
+                intervalSeconds < MIN_INTERVAL || intervalSeconds > MAX_INTERVAL ||
+                radius < MIN_RADIUS || radius > MAX_RADIUS ||
+                effectLevel < MIN_LEVEL || effectLevel > MAX_LEVEL)
+                throw new IllegalArgumentException("GuaiGuai setting outside permitted bounds");
+        }
+        Settings change(String key, Object value) {
+            return new Settings(key.equals("recipe") ? (Boolean)value : recipe,
+                    key.equals("effect") ? (Boolean)value : effect,
+                    key.equals("duration") ? (Integer)value : durationSeconds,
+                    key.equals("interval") ? (Integer)value : intervalSeconds,
+                    key.equals("radius") ? (Integer)value : radius,
+                    key.equals("level") ? (Integer)value : effectLevel);
+        }
+    }
+
+    private static Map<String, Settings> defaults() {
+        Map<String, Settings> m = new LinkedHashMap<>();
+        for (String color : COLORS)
+            m.put(color, new Settings(true, true, color.equals("red") || color.equals("black") ? 180 : 300, 60, 7, 1));
+        return Map.copyOf(m);
+    }
+    static Settings get(String color) { return Objects.requireNonNull(settings.get(color), "Unknown color"); }
+    static boolean recipeEnabled(String color) {
+        Settings s = settings.get(color);
+        return s != null && s.recipe();
+    }
+    private static Path path() { return FMLPaths.CONFIGDIR.get().resolve("guaiguai-server.json"); }
+    static synchronized void load() throws IOException {
+        Path p = path();
+        Map<String, Settings> next = new LinkedHashMap<>(defaults());
+        if (!Files.exists(p)) {
+            save(next);
+            settings = Map.copyOf(next);
+            return;
+        }
+        try {
+            JsonObject document = JsonParser.parseString(Files.readString(p, StandardCharsets.UTF_8)).getAsJsonObject();
+            for (String color : COLORS) {
+                if (!document.has(color)) continue;
+                JsonObject v = document.getAsJsonObject(color);
+                Settings d = next.get(color);
+                next.put(color, new Settings(bool(v,"recipe",d.recipe()),bool(v,"effect",d.effect()),
+                    number(v,"durationSeconds",d.durationSeconds()),number(v,"intervalSeconds",d.intervalSeconds()),
+                    number(v,"radius",d.radius()),number(v,"effectLevel",d.effectLevel())));
+            }
+        } catch (RuntimeException e) { throw new IOException("Invalid GuaiGuai configuration: " + p, e); }
+        settings = Map.copyOf(next);
+    }
+    private static boolean bool(JsonObject o,String k,boolean def) {
+        JsonElement e = o.get(k);
+        if (e == null) return def;
+        if (!e.isJsonPrimitive() || !e.getAsJsonPrimitive().isBoolean()) throw new IllegalArgumentException(k);
+        return e.getAsBoolean();
+    }
+    private static int number(JsonObject o,String k,int def) {
+        JsonElement e = o.get(k);
+        if (e == null) return def;
+        if (!e.isJsonPrimitive() || !e.getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException(k);
+        return e.getAsBigDecimal().intValueExact();
+    }
+    static synchronized void change(String color,String key,Object value) throws IOException {
+        Map<String, Settings> next = new LinkedHashMap<>(settings);
+        for (String c : COLORS)
+            if (color.equals("all") || color.equals(c)) next.put(c,next.get(c).change(key,value));
+        save(next);
+        settings = Map.copyOf(next);
+    }
+    static synchronized void reset(String color) throws IOException {
+        Map<String, Settings> next = new LinkedHashMap<>(settings);
+        Map<String, Settings> d = defaults();
+        for (String c : COLORS) if (color.equals("all") || color.equals(c)) next.put(c,d.get(c));
+        save(next);
+        settings = Map.copyOf(next);
+    }
+    private static void save(Map<String, Settings> next) throws IOException {
+        Path p = path();
+        Files.createDirectories(p.getParent());
+        Path temp = Files.createTempFile(p.getParent(),"guaiguai-",".tmp");
+        try {
+            Map<String, Settings> ordered = new LinkedHashMap<>();
+            for (String c : COLORS) ordered.put(c, next.get(c));
+            Files.writeString(temp,GSON.toJson(ordered),StandardCharsets.UTF_8);
+            try { Files.move(temp,p,StandardCopyOption.REPLACE_EXISTING,StandardCopyOption.ATOMIC_MOVE); }
+            catch (AtomicMoveNotSupportedException e) { Files.move(temp,p,StandardCopyOption.REPLACE_EXISTING); }
+        } finally { Files.deleteIfExists(temp); }
+    }
+}
+''')
+write(java/'RecipeEnabledCondition.java','''package tw.zonezero.guaiguai;
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import net.neoforged.neoforge.common.conditions.ICondition;
+
+public record RecipeEnabledCondition(String color) implements ICondition {
+    public static final MapCodec<RecipeEnabledCondition> CODEC =
+        Codec.STRING.fieldOf("color").xmap(RecipeEnabledCondition::new, RecipeEnabledCondition::color);
+    @Override public boolean test(IContext context) { return AdminSettings.recipeEnabled(color); }
+    @Override public MapCodec<? extends ICondition> codec() { return CODEC; }
+}
+''')
+write(java/'AdminCommands.java','''package tw.zonezero.guaiguai;
+import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+final class AdminCommands {
+    static void register(RegisterCommandsEvent event) {
+        var root = Commands.literal("guaiguai").requires(s -> s.hasPermission(2));
+        var set = Commands.literal("set");
+        var status = Commands.literal("status").executes(c -> status(c.getSource(),"all"));
+        var reset = Commands.literal("reset");
+        List<String> colors = new ArrayList<>(AdminSettings.COLORS);
+        colors.add("all");
+        for (String color : colors) {
+            LiteralArgumentBuilder<CommandSourceStack> node = Commands.literal(color);
+            for (String key : List.of("recipe","effect")) {
+                node.then(Commands.literal(key).then(Commands.argument("value",BoolArgumentType.bool())
+                    .executes(c -> change(c.getSource(),color,key,BoolArgumentType.getBool(c,"value")))));
+            }
+            addNumber(node,color,"duration",AdminSettings.MIN_DURATION,AdminSettings.MAX_DURATION);
+            addNumber(node,color,"interval",AdminSettings.MIN_INTERVAL,AdminSettings.MAX_INTERVAL);
+            addNumber(node,color,"radius",AdminSettings.MIN_RADIUS,AdminSettings.MAX_RADIUS);
+            addNumber(node,color,"level",AdminSettings.MIN_LEVEL,AdminSettings.MAX_LEVEL);
+            set.then(node);
+            status.then(Commands.literal(color).executes(c -> status(c.getSource(),color)));
+            reset.then(Commands.literal(color).executes(c -> {
+                try {
+                    AdminSettings.reset(color);
+                    c.getSource().sendSuccess(() -> Component.literal("已還原 "+color+"。配方請執行 /reload。"),true);
+                    return 1;
+                } catch(IOException ex) { return fail(c.getSource(),ex); }
+            }));
+        }
+        root.then(set).then(status).then(reset).then(Commands.literal("reload").executes(c -> {
+            try {
+                AdminSettings.load();
+                c.getSource().sendSuccess(() -> Component.literal("乖乖設定檔已重新讀取。配方請執行 /reload。"),true);
+                return 1;
+            } catch(IOException ex) { return fail(c.getSource(),ex); }
+        }));
+        event.getDispatcher().register(root);
+    }
+    private static void addNumber(LiteralArgumentBuilder<CommandSourceStack> node,String color,String key,int min,int max) {
+        node.then(Commands.literal(key).then(Commands.argument("value",IntegerArgumentType.integer(min,max))
+            .executes(c -> change(c.getSource(),color,key,IntegerArgumentType.getInteger(c,"value")))));
+    }
+    private static int change(CommandSourceStack source,String color,String key,Object value) {
+        try {
+            AdminSettings.change(color,key,value);
+            String message = color+" / "+key+" = "+value+"，已儲存。"
+                +(key.equals("recipe")?" 請執行 /reload 使配方生效。":" 將於下一次效果排程套用。");
+            source.sendSuccess(() -> Component.literal(message),true);
+            return 1;
+        } catch(IOException ex) { return fail(source,ex); }
+    }
+    private static int status(CommandSourceStack source,String color) {
+        for(String c:AdminSettings.COLORS) if(color.equals("all")||color.equals(c)){
+            var v=AdminSettings.get(c);
+            source.sendSuccess(() -> Component.literal(c+"：配方="+v.recipe()+"，效果="+v.effect()+
+                "，持續="+v.durationSeconds()+"秒，間隔="+v.intervalSeconds()+"秒，半徑="+v.radius()+"，等級="+v.effectLevel()),false);
+        }
+        return 1;
+    }
+    private static int fail(CommandSourceStack source,IOException ex) {
+        source.sendFailure(Component.literal("乖乖設定讀寫失敗："+ex.getMessage()));
+        return 0;
+    }
+}
+''')
+p=java/'GuaiGuai.java'
+s=p.read_text()
+s=replace(s,'import java.util.function.Supplier;','''import java.util.function.Supplier;
+import com.mojang.serialization.MapCodec;
+import net.neoforged.neoforge.common.conditions.ICondition;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
+import net.neoforged.neoforge.common.NeoForge;''')
+s=replace(s,'    public GuaiGuai(IEventBus bus) {','''    private static final DeferredRegister<MapCodec<? extends ICondition>> CONDITIONS =
+        DeferredRegister.create(NeoForgeRegistries.Keys.CONDITION_CODECS, MOD_ID);
+    static { CONDITIONS.register("recipe_enabled", () -> RecipeEnabledCondition.CODEC); }
+
+    public GuaiGuai(IEventBus bus) {
+        try { AdminSettings.load(); }
+        catch (java.io.IOException e) { throw new IllegalStateException("Failed to load GuaiGuai configuration",e); }
+        CONDITIONS.register(bus);
+        NeoForge.EVENT_BUS.addListener(AdminCommands::register);''')
+write(p,s)
+# 1.21.1 shaped recipes, one output, six mineral blocks.
+recipe_root=root/'src/main/resources/data/guaiguai/recipe'
+pairs={
+    'green':('emerald_block','milk_bucket'),
+    'yellow':('gold_block','iron_ingot'),
+    'red':('redstone_block','diamond'),
+    'blue':('lapis_block','prismarine_crystals'),
+    'purple':('amethyst_block','golden_carrot'),
+    'black':('crying_obsidian','diamond_block')
+}
+for color,(core,extra) in pairs.items():
+    recipe={
+        'neoforge:conditions':[{'type':'guaiguai:recipe_enabled','color':color}],
+        'type':'minecraft:crafting_shaped',
+        'category':'misc',
+        'pattern':['CPC','CEC','CSC'],
+        'key':{'C':{'item':'minecraft:'+core},'P':{'item':'minecraft:paper'},
+               'E':{'item':'minecraft:'+extra},'S':{'tag':'minecraft:wooden_slabs'}},
+        'result':{'id':'guaiguai:'+color+'_guaiguai','count':1}
+    }
+    assert sum(row.count('C') for row in recipe['pattern']) == 6
+    write(recipe_root/f'{color}_guaiguai.json',json.dumps(recipe,indent=2)+'\n')
+# Keep the recipe book unlock aligned with the recipe condition.
+for color,(core,extra) in pairs.items():
+    advancement={'neoforge:conditions':[{'type':'guaiguai:recipe_enabled','color':color}],
+        'parent':'minecraft:recipes/root',
+        'criteria':{'has_core':{'trigger':'minecraft:inventory_changed','conditions':{'items':[{'items':'minecraft:'+core}]}},
+                    'has_recipe':{'trigger':'minecraft:recipe_unlocked','conditions':{'recipe':'guaiguai:'+color+'_guaiguai'}}},
+        'requirements':[['has_core','has_recipe']],
+        'rewards':{'recipes':['guaiguai:'+color+'_guaiguai']}}
+    write(root/'src/main/resources/data/guaiguai/advancement/recipes/misc'/f'{color}_guaiguai.json',json.dumps(advancement,indent=2)+'\n')
+for name in ['build.gradle','src/main/resources/META-INF/neoforge.mods.toml']:
+    p=root/name;write(p,p.read_text().replace('0.1.7','0.1.8'))
+p=root/'README_zh_TW.txt'
+write(p,p.read_text()+'''
+v0.1.8：六色工作台配方與 OP 管理設定。
+設定檔：config/guaiguai-server.json（此伺服器實例共用）。
+指令（OP 權限等級 2）：
+/guaiguai status [green|yellow|red|blue|purple|black|all]
+/guaiguai set <顏色|all> recipe <true|false>  然後執行 /reload
+/guaiguai set <顏色|all> effect <true|false>
+/guaiguai set <顏色|all> duration <1..86400> 秒
+/guaiguai set <顏色|all> interval <10..3600> 秒
+/guaiguai set <顏色|all> radius <1..32> 格
+/guaiguai set <顏色|all> level <1..5>
+/guaiguai reset <顏色|all>
+/guaiguai reload 重新讀取設定檔；配方另執行 /reload。
+效果調整從下一次排程開始，已排程方塊不會立即重排，玩家既有效果自然倒數。
+設定持久化；配方開關由 NeoForge data load condition 判定。
+''')
+print('v0.1.8: recipe and operator settings generated.')
