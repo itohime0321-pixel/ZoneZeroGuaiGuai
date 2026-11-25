@@ -1,10 +1,9 @@
-name: Build Guai Guai
+name: Build Guai Guai v0.1.7
 on:
   push:
+    branches: [main]
     paths:
-      - 'GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip'
-      - 'upgrade_model.py'
-      - '.github/workflows/build.yml'
+      - 'GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip'
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,15 +19,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.12.1'
-      - name: Extract original source
-        run: unzip -q GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip
-      - name: Generate v0.1.4 pouch models
-        run: python3 upgrade_model.py guai_guai_source
+      - name: Verify and extract v0.1.7 archive
+        run: |
+          test -f GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip
+          echo "c9a9c6e3a640f9f2e80d25c7978be96c4dd01fdc730f9a4d18412ba9eee9be07  GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip" | sha256sum -c -
+          unzip -q GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip
+      - name: Test aura timing helpers
+        working-directory: guai_guai_source
+        run: bash tests/run-timing-tests.sh
       - name: Build mod
         working-directory: guai_guai_source
         run: gradle --no-daemon build
       - uses: actions/upload-artifact@v4
         with:
-          name: guaiguai-neoforge-1.21.1-v0.1.4
+          name: guaiguai-neoforge-1.21.1-v0.1.7
           path: guai_guai_source/build/libs/*.jar
           if-no-files-found: error
