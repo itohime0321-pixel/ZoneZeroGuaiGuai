@@ -3,7 +3,10 @@ on:
   push:
     branches: [main]
     paths:
-      - 'GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip'
+      - 'GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip'
+      - 'upgrade_model.py'
+      - 'upgrade_v017.py'
+      - '.github/workflows/build.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,12 +22,16 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.12.1'
-      - name: Verify and extract v0.1.7 archive
+      - name: Verify original source and extract
         run: |
-          test -f GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip
-          echo "c9a9c6e3a640f9f2e80d25c7978be96c4dd01fdc730f9a4d18412ba9eee9be07  GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip" | sha256sum -c -
-          unzip -q GuaiGuai-NeoForge-1.21.1-v0.1.7-source.zip
-      - name: Test aura timing helpers
+          python3 -c "import hashlib,pathlib; p=pathlib.Path('GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip'); b=p.read_bytes(); assert hashlib.sha1(('blob '+str(len(b))+'\\0').encode()+b).hexdigest()=='a99e203b580d85203c655ab36830e9b0d3ce3159'"
+          unzip -q GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip
+      - name: Generate model and optimized v0.1.7 sources
+        run: |
+          command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          python3 upgrade_model.py guai_guai_source
+          python3 upgrade_v017.py guai_guai_source
+      - name: Test aura timing
         working-directory: guai_guai_source
         run: bash tests/run-timing-tests.sh
       - name: Build mod
