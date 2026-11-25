@@ -1,4 +1,4 @@
-name: Build Guai Guai v0.1.7
+name: Build Guai Guai v0.1.8
 on:
   push:
     branches: [main]
@@ -26,7 +26,7 @@ jobs:
         run: |
           python3 -c "import hashlib,pathlib; p=pathlib.Path('GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip'); b=p.read_bytes(); assert hashlib.sha1(('blob '+str(len(b))+'\\0').encode()+b).hexdigest()=='a99e203b580d85203c655ab36830e9b0d3ce3159'"
           unzip -q GuaiGuai-NeoForge-1.21.1-v0.1.1-source.zip
-      - name: Generate model and optimized v0.1.7 sources
+      - name: Generate model and optimized v0.1.8 sources
         run: |
           command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
           python3 upgrade_model.py guai_guai_source
@@ -39,6 +39,6 @@ jobs:
         run: gradle --no-daemon build
       - uses: actions/upload-artifact@v4
         with:
-          name: guaiguai-neoforge-1.21.1-v0.1.7
+          name: guaiguai-neoforge-1.21.1-v0.1.8
           path: guai_guai_source/build/libs/*.jar
           if-no-files-found: error
